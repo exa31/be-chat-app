@@ -113,6 +113,27 @@ export async function getClient(): Promise<PoolClient> {
     return pool.connect();
 }
 
+export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+    if (!pool) throw new Error('Postgres pool not initialized. Call initPostgres() first.');
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await fn(client);
+        await client.query('COMMIT');
+        return result;
+    } catch (err) {
+        try {
+            await client.query('ROLLBACK');
+        } catch (rollbackErr) {
+            // eslint-disable-next-line no-console
+            console.error('[postgres] rollback failed', rollbackErr);
+        }
+        throw err;
+    } finally {
+        client.release();
+    }
+}
+
 export async function shutdownPostgres(timeoutMs = 5000): Promise<void> {
     if (!pool) return;
     const current = pool;

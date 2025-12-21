@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from 'cookie-parser';
 import Config from './config';
 import {initPostgres, shutdownPostgres} from "./databases/postgres";
 import userRouter from './modules/user/userRoute';
@@ -7,8 +8,9 @@ import {errorHandler} from './middleware/errorHandler';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({origin: true, credentials: true}));
 app.use(express.json());
+app.use(cookieParser());
 
 // TODO: register routes here (import routers after DB init if they depend on DB)
 
