@@ -134,6 +134,9 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     }
 }
 
+// executeInTransaction is an alias with a clearer name used by services
+export const executeInTransaction = withTransaction;
+
 export async function shutdownPostgres(timeoutMs = 5000): Promise<void> {
     if (!pool) return;
     const current = pool;
@@ -159,3 +162,4 @@ export async function shutdownPostgres(timeoutMs = 5000): Promise<void> {
 }
 
 export {pool};
+export type {PoolClient};
