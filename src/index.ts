@@ -4,8 +4,10 @@ import cookieParser from 'cookie-parser';
 import Config from './config';
 import {initPostgres, shutdownPostgres} from "./databases/postgres";
 import userRouter from './modules/user/userRoute';
+import chatRouter from './modules/chat/chatRoute';
 import {errorHandler} from './middleware/errorHandler';
 import * as rabbit from './lib/rabbitmq';
+import chatRequestRouter from './modules/chatRequest/chatRequestRoute';
 
 const app = express();
 
@@ -30,6 +32,11 @@ async function start() {
         });
         // Register routers after DB init
         app.use('/api/users', userRouter);
+        app.use('/api/chats', chatRouter);
+        app.use('/api/chat-requests', chatRequestRouter);
+        app.use('/api/health', (_req, res) => {
+            res.status(200).send('OK');
+        })
 
         // Register error handler after routers
         app.use(errorHandler);

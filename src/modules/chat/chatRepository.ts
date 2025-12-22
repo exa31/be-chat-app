@@ -8,11 +8,14 @@ export async function createChatWithClient(client: PoolClient, type: string, tit
 }
 
 export async function addMembersWithClient(client: PoolClient, chatId: string, userIds: string[], role: string = 'member') {
-    const sql = 'INSERT INTO chat_members (chat_id, user_id, role) VALUES ' + userIds.map((_, i) => `($1, $${i + 2}, $${i + 3})`).join(',');
-    // this naive approach would duplicate role params; instead loop inserts
     for (const userId of userIds) {
         await client.query('INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, $3)', [chatId, userId, role]);
     }
+}
+
+// Add helper to insert a single member with a specific role
+export async function addMemberWithClient(client: PoolClient, chatId: string, userId: string, role: string = 'member') {
+    await client.query('INSERT INTO chat_members (chat_id, user_id, role) VALUES ($1, $2, $3)', [chatId, userId, role]);
 }
 
 export async function getChatById(chatId: string) {
@@ -27,4 +30,3 @@ export async function listChatsForUser(userId: string) {
                                       WHERE m.user_id = $1`, [userId]);
     return res.rows;
 }
-

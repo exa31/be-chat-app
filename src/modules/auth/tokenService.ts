@@ -21,7 +21,9 @@ export function signAccessToken(payload: object): string {
 
 export function verifyAccessToken(token: string) {
     const secret = getJwtSecret();
-    return jwt.verify(token, secret) as any;
+    const payload = jwt.verify(token, secret) as any;
+    if (payload?.typ && payload.typ !== 'access') throw new Error('invalid_token_type');
+    return payload;
 }
 
 export function signRefreshToken(userId: string): { token: string; expiresAt: Date } {

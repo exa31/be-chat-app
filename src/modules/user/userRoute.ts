@@ -6,6 +6,7 @@ import {asyncHandler} from '../../middleware/asyncHandler';
 import {sendError, sendSuccess} from '../../utils/response';
 import * as tokenService from '../auth/tokenService';
 import * as userRepo from './userRepository';
+import {authenticate} from '../../middleware/auth';
 
 const router = Router();
 
@@ -45,14 +46,26 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
     return sendSuccess(res, {access_token: result.access_token, user: result.user}, 'login_success');
 }));
 
-router.get('/:id', asyncHandler(async (req: Request, res: Response) => {
+router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
     const userId = req.params.id;
     // validate uuid param
     const uuidCheck = z.string().uuid().safeParse(userId);
     if (!uuidCheck.success) return sendError(res, 400, 'invalid_id');
 
+    const authId = (req as any).user?.id;
+    if (!authId) return sendError(res, 401, 'missing_user');
+    if (authId !== userId) return sendError(res, 403, 'forbidden');
+
     const user = await service.getProfile(userId);
     return sendSuccess(res, user, 'user_found');
+}));
+
+// get profile of current authenticated user
+router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response) => {
+    const authId = (req as any).user?.id;
+    if (!authId) return sendError(res, 401, 'missing_user');
+    const user = await service.getProfile(authId);
+    return sendSuccess(res, user, 'user_profile');
 }));
 
 router.post('/refresh', asyncHandler(async (req: Request, res: Response) => {
