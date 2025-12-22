@@ -5,6 +5,7 @@ import Config from './config';
 import {initPostgres, shutdownPostgres} from "./databases/postgres";
 import userRouter from './modules/user/userRoute';
 import {errorHandler} from './middleware/errorHandler';
+import * as rabbit from './lib/rabbitmq';
 
 const app = express();
 
@@ -21,6 +22,12 @@ let server: ReturnType<typeof app.listen> | null = null;
 async function start() {
     try {
         await initPostgres();
+        await rabbit.connect(Config.RABBITMQ_URL, {
+            retries: 5,
+            initialDelayMs: 200,
+            factor: 2,
+            useConfirmChannel: true,
+        });
         // Register routers after DB init
         app.use('/api/users', userRouter);
 
@@ -44,6 +51,7 @@ async function shutdown() {
     try {
         // eslint-disable-next-line no-console
         console.log('Shutting down...');
+        await rabbit.close();
         await shutdownPostgres();
     } catch (err) {
         // eslint-disable-next-line no-console

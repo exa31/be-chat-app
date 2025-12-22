@@ -20,6 +20,9 @@ class Config {
     public static readonly PG_IDLE_TIMEOUT_MS = process.env.PG_IDLE_TIMEOUT_MS ? Number(process.env.PG_IDLE_TIMEOUT_MS) : 30000;
     public static readonly PG_CONNECTION_TIMEOUT_MS = process.env.PG_CONNECTION_TIMEOUT_MS ? Number(process.env.PG_CONNECTION_TIMEOUT_MS) : 2000;
     public static readonly PG_SSL = process.env.PG_SSL === 'true';
+
+    // RabbitMQ settings
+    public static readonly RABBITMQ_URL = process.env.RABBITMQ_URL ?? 'amqp://localhost';
 }
 
 export default Config;

@@ -12,6 +12,7 @@
     "migrate:create": "npx node-pg-migrate create -m migrations"
   },
   "dependencies": {
+    "amqplib": "^0.10.3",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -29,6 +30,7 @@
     "zod": "^4.0.5"
   },
   "devDependencies": {
+    "@types/amqplib": "^0.10.8",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^4.17.21",
