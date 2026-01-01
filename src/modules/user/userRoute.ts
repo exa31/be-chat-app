@@ -30,7 +30,11 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
     // set refresh token cookie
     res.cookie(REFRESH_COOKIE_NAME, result.refresh_token, REFRESH_COOKIE_OPTIONS);
 
-    return sendSuccess(res, {access_token: result.access_token, user: result.user}, 'user_created', 201);
+    return sendSuccess(res, {
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+        user: result.user
+    }, 'user_created', 201);
 }));
 
 router.post('/login', asyncHandler(async (req: Request, res: Response) => {
@@ -43,7 +47,11 @@ router.post('/login', asyncHandler(async (req: Request, res: Response) => {
     const result = await service.loginByEmail(email, password);
 
     res.cookie(REFRESH_COOKIE_NAME, result.refresh_token, REFRESH_COOKIE_OPTIONS);
-    return sendSuccess(res, {access_token: result.access_token, user: result.user}, 'login_success');
+    return sendSuccess(res, {
+        access_token: result.access_token,
+        refresh_token: result.refresh_token,
+        user: result.user
+    }, 'login_success');
 }));
 
 router.get('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {

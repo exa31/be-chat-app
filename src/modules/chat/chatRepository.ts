@@ -30,3 +30,8 @@ export async function listChatsForUser(userId: string) {
                                       WHERE m.user_id = $1`, [userId]);
     return res.rows;
 }
+
+export async function hasPrivateChatBetween(userA: string, userB: string): Promise<boolean> {
+    const res = await query('SELECT 1 FROM chats c JOIN chat_members cm1 ON c.id = cm1.chat_id JOIN chat_members cm2 ON c.id = cm2.chat_id WHERE c.type = $1 AND cm1.user_id = $2 AND cm2.user_id = $3 LIMIT 1', ['private', userA, userB]);
+    return res.rows.length > 0;
+}

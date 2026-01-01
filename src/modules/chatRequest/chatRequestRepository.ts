@@ -1,11 +1,12 @@
 import {query} from '../../databases/postgres';
-import {ChatRequestRow} from './chatRequestModel';
+import {ChatRequestResponse, ChatRequestRow} from './chatRequestModel';
 import {PoolClient} from 'pg';
 import {HttpError} from '../../errors/HttpError';
 
 export async function createRequestWithClient(client: PoolClient, senderId: string, receiverId: string): Promise<ChatRequestRow> {
     const text = `INSERT INTO chat_requests (sender_id, receiver_id)
-                  VALUES ($1, $2) RETURNING id, sender_id, receiver_id, status, created_at, responded_at`;
+                  VALUES ($1,
+                          $2) RETURNING id, sender_id, receiver_id, status, created_at, responded_at, rejected_reason, cooldown_until`;
     try {
         const res = await client.query<ChatRequestRow>(text, [senderId, receiverId]);
         return res.rows[0];
@@ -19,7 +20,8 @@ export async function createRequestWithClient(client: PoolClient, senderId: stri
 
 export async function createRequest(senderId: string, receiverId: string): Promise<ChatRequestRow> {
     const text = `INSERT INTO chat_requests (sender_id, receiver_id)
-                  VALUES ($1, $2) RETURNING id, sender_id, receiver_id, status, created_at, responded_at`;
+                  VALUES ($1,
+                          $2) RETURNING id, sender_id, receiver_id, status, created_at, responded_at, rejected_reason, cooldown_until`;
     try {
         const res = await query<ChatRequestRow>(text, [senderId, receiverId]);
         return res.rows[0];
@@ -32,12 +34,19 @@ export async function createRequest(senderId: string, receiverId: string): Promi
 }
 
 export async function findById(id: string): Promise<ChatRequestRow | null> {
-    const res = await query<ChatRequestRow>('SELECT id, sender_id, receiver_id, status, created_at, responded_at FROM chat_requests WHERE id = $1', [id]);
+    const res = await query<ChatRequestRow>('SELECT id, sender_id, receiver_id, status, created_at, responded_at, rejected_reason, cooldown_until FROM chat_requests WHERE id = $1', [id]);
     return res.rows[0] ?? null;
 }
 
 export async function findPendingBetween(userA: string, userB: string): Promise<ChatRequestRow | null> {
-    const res = await query<ChatRequestRow>(`SELECT id, sender_id, receiver_id, status, created_at, responded_at
+    const res = await query<ChatRequestRow>(`SELECT id,
+                                                    sender_id,
+                                                    receiver_id,
+                                                    status,
+                                                    created_at,
+                                                    responded_at,
+                                                    rejected_reason,
+                                                    cooldown_until
                                              FROM chat_requests
                                              WHERE ((sender_id = $1 AND receiver_id = $2)
                                                  OR (sender_id = $2 AND receiver_id = $1))
@@ -45,13 +54,37 @@ export async function findPendingBetween(userA: string, userB: string): Promise<
     return res.rows[0] ?? null;
 }
 
-export async function listForUser(userId: string): Promise<ChatRequestRow[]> {
-    const res = await query<ChatRequestRow>('SELECT id, sender_id, receiver_id, status, created_at, responded_at FROM chat_requests WHERE receiver_id = $1 ORDER BY created_at DESC', [userId]);
+// check if there is a rejected row with active cooldown between sender and receiver (directional: sender->receiver)
+export async function hasActiveRejectedCooldown(senderId: string, receiverId: string): Promise<boolean> {
+    const res = await query('SELECT 1 FROM chat_requests WHERE sender_id = $1 AND receiver_id = $2 AND status = $3 AND cooldown_until > current_timestamp LIMIT 1', [senderId, receiverId, 'rejected']);
+    return (res.rows.length > 0);
+}
+
+export async function listForUser(userId: string): Promise<ChatRequestResponse[]> {
+    const res = await query<ChatRequestResponse>(`SELECT cr.id,
+                                                         u.name,
+                                                         cr.sender_id,
+                                                         cr.receiver_id,
+                                                         cr.status,
+                                                         cr.created_at,
+                                                         cr.responded_at,
+                                                         cr.rejected_reason,
+                                                         cr.cooldown_until
+                                                  FROM chat_requests cr
+                                                           JOIN users u ON u.id = cr.sender_id
+                                                  WHERE cr.receiver_id = $1
+                                                    AND cr.status != 'rejected'
+                                                  ORDER BY cr.created_at DESC`, [userId]);
     return res.rows;
 }
 
-export async function updateStatusWithClient(client: PoolClient, id: string, status: 'accepted' | 'rejected'): Promise<ChatRequestRow | null> {
-    const res = await client.query<ChatRequestRow>('UPDATE chat_requests SET status = $1, responded_at = current_timestamp WHERE id = $2 RETURNING id, sender_id, receiver_id, status, created_at, responded_at', [status, id]);
+export async function listFromUser(userId: string): Promise<ChatRequestResponse[]> {
+    const res = await query<ChatRequestResponse>('SELECT cr.id, u.name, cr.sender_id, cr.receiver_id, cr.status, cr.created_at, cr.responded_at, cr.rejected_reason, cr.cooldown_until FROM chat_requests cr JOIN users u ON u.id = cr.receiver_id  WHERE cr.sender_id = $1 ORDER BY cr.created_at DESC', [userId]);
+    return res.rows;
+}
+
+export async function updateStatusWithClient(client: PoolClient, id: string, status: 'accepted' | 'rejected' | 'blocked', rejectedReason: string | null = null, cooldownUntil: string | null = null): Promise<ChatRequestRow | null> {
+    const res = await client.query<ChatRequestRow>('UPDATE chat_requests SET status = $1, responded_at = current_timestamp, rejected_reason = $2, cooldown_until = $3 WHERE id = $4 RETURNING id, sender_id, receiver_id, status, created_at, responded_at, rejected_reason, cooldown_until', [status, rejectedReason, cooldownUntil, id]);
     return res.rows[0] ?? null;
 }
 

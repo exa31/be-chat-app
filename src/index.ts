@@ -8,12 +8,16 @@ import chatRouter from './modules/chat/chatRoute';
 import {errorHandler} from './middleware/errorHandler';
 import * as rabbit from './lib/rabbitmq';
 import chatRequestRouter from './modules/chatRequest/chatRequestRoute';
+import {logRequest} from './middleware/logrequest';
 
 const app = express();
 
 app.use(cors({origin: true, credentials: true}));
 app.use(express.json());
 app.use(cookieParser());
+
+// attach request logger early
+app.use(logRequest);
 
 // TODO: register routes here (import routers after DB init if they depend on DB)
 

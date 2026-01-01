@@ -23,19 +23,26 @@ router.post('/', authenticate, asyncHandler(async (req: Request, res: Response) 
     if (receiverRow.id === senderId) return sendError(res, 400, 'cannot_request_self');
 
     const payload = {sender_id: senderId, receiver_id: receiverRow.id};
-    const result = await service.sendRequest(payload as any);
+    const result = await service.sendRequest(payload);
     return sendSuccess(res, result, 'request_created', 201);
 }));
 
-router.get('/incoming/:userId', authenticate, asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.params.userId;
+router.get('/incoming', authenticate, asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
     const check = z.string().uuid().safeParse(userId);
     if (!check.success) return sendError(res, 400, 'invalid_user_id');
     // Only allow access if userId matches token user
-    const authId = (req as any).user?.id;
-    if (authId !== userId) return sendError(res, 403, 'forbidden');
     const list = await service.listIncomingRequests(userId);
-    return sendSuccess(res, list, 'requests_list');
+    return sendSuccess(res, list, 'requests_incoming_list');
+}));
+
+router.get('/outgoing', authenticate, asyncHandler(async (req: Request, res: Response) => {
+    const userId = (req as any).user?.id;
+    const check = z.string().uuid().safeParse(userId);
+    if (!check.success) return sendError(res, 400, 'invalid_user_id');
+    // Only allow access if userId matches token user
+    const list = await service.listOutgoingRequests(userId);
+    return sendSuccess(res, list, 'requests_outgoing_list');
 }));
 
 // middleware to load chat request by :id and attach to req.chatRequest
@@ -58,19 +65,30 @@ router.post('/:id/respond', authenticate, loadChatRequest, asyncHandler(async (r
     const row = (req as any).chatRequest;
     if (row.receiver_id !== authId) return sendError(res, 403, 'forbidden');
 
-    const updated = await service.respondRequest(id, accept);
+    // accept: body may contain accept: true
+    // reject: allow rejectedReason; block: body.block === true
+    const parsed = z.object({
+        rejectedReason: z.string().optional().nullable(),
+        block: z.boolean().optional()
+    }).safeParse(req.body ?? {});
+    const opts = parsed.success ? {
+        rejectedReason: parsed.data.rejectedReason ?? null,
+        block: parsed.data.block === true
+    } : {rejectedReason: null, block: false};
+
+    const updated = await service.respondRequest(id, accept, opts);
     return sendSuccess(res, updated, 'request_responded');
 }));
 
 router.delete('/:id', authenticate, asyncHandler(async (req: Request, res: Response) => {
     const id = req.params.id;
+    const parse = z.string().uuid().safeParse(id);
+    if (!parse.success) return sendError(res, 400, 'invalid_id');
+
     const authId = (req as any).user?.id;
     if (!authId) return sendError(res, 401, 'missing_user');
-    // ensure only sender can cancel
-    const row = await repo.findById(id);
-    if (!row) return sendError(res, 404, 'not_found');
-    if (row.sender_id !== authId) return sendError(res, 403, 'forbidden');
 
+    // Delegate all validation/permission/deletion logic to the service
     await service.cancelRequest(id, authId);
     return sendSuccess(res, null, 'request_cancelled');
 }));
