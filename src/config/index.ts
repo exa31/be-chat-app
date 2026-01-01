@@ -9,6 +9,7 @@ class Config {
     public static readonly GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
     public static readonly GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
     public static readonly REDIS_URL = process.env.REDIS_URL;
+    public static readonly CLIENT_URL = process.env.CLIENT_URL;
 
     // Postgres settings
     public static readonly PG_HOST = process.env.PG_HOST ?? 'localhost';
