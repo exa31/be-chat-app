@@ -4,6 +4,7 @@ import cors from "cors";
 import cookieParser from 'cookie-parser';
 import Config from './config';
 import {initPostgres, shutdownPostgres} from "./databases/postgres";
+import {initRedis, shutdownRedis} from "./databases/redis";
 import userRouter from './modules/user/userRoute';
 import chatRouter from './modules/chat/chatRoute';
 import {errorHandler} from './middleware/errorHandler';
@@ -33,6 +34,7 @@ let server: typeof httpServer | null = null;
 async function start() {
     try {
         await initPostgres();
+        await initRedis();
         await rabbit.connect(Config.RABBITMQ_URL, {
             retries: 5,
             initialDelayMs: 200,
@@ -102,6 +104,7 @@ async function shutdown() {
         console.log('Shutting down...');
         await ws.close();
         await rabbit.close();
+        await shutdownRedis();
         await shutdownPostgres();
     } catch (err) {
         // eslint-disable-next-line no-console
