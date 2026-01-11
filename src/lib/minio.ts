@@ -180,7 +180,7 @@ class MinioClientWrapper {
     async uploadStream(
         bucketName: string,
         objectName: string,
-        stream: NodeJS.ReadableStream,
+        stream: NodeJS.ReadStream,
         size: number,
         contentType: string,
         metadata: Record<string, string> = {}
