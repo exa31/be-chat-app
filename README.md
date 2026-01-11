@@ -1,320 +1,545 @@
-# Chat Application Backend
+# Chat App Backend
 
-Backend untuk aplikasi chat real-time dengan REST API dan WebSocket.
+Backend API untuk aplikasi chat real-time yang dibangun dengan Express.js, TypeScript, PostgreSQL, Redis, dan WebSocket.
 
-## 🚀 Tech Stack
+## 📋 Daftar Isi
 
-- **Runtime**: Node.js + TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL
-- **Real-time**: Socket.IO (WebSocket)
-- **Message Queue**: RabbitMQ
-- **Authentication**: JWT + Refresh Token
-- **Validation**: Zod
-- **Migration**: node-pg-migrate
+- [Instalasi & Setup](#instalasi--setup)
+- [Struktur Project](#struktur-project)
+- [Konfigurasi Environment](#konfigurasi-environment)
+- [Database & Migrations](#database--migrations)
+- [API Endpoints](#api-endpoints)
+- [Authentication](#authentication)
+- [WebSocket](#websocket)
+- [Redis](#redis)
+- [RabbitMQ](#rabbitmq)
+- [Development](#development)
 
-## 📦 Installation
+## 🚀 Instalasi & Setup
+
+### Prerequisites
+
+- Node.js >= 18
+- PostgreSQL >= 14
+- Redis >= 6
+- RabbitMQ >= 3.8
+
+### Install Dependencies
 
 ```bash
 npm install
 ```
 
-## 🔧 Configuration
+### Environment Variables
 
-Create `.env` file:
+Buat file `.env` di root directory:
 
 ```env
+# Server
 PORT=3003
 NODE_ENV=development
 
-# Database
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=yourpassword
-POSTGRES_DB=chatapp
+# PostgreSQL
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=your_user
+PG_PASSWORD=your_password
+PG_DATABASE=chatapp
+PG_SSL=false
 
-# JWT
-JWT_SECRET=your-secret-key
-JWT_EXPIRES_IN=15m
-REFRESH_TOKEN_SECRET=your-refresh-secret
-REFRESH_TOKEN_EXPIRES_IN=7d
+# Redis
+REDIS_URL=redis://localhost:6379
 
 # RabbitMQ
 RABBITMQ_URL=amqp://localhost
 
-# Client URL (for CORS)
+# JWT & Security
+SECRET_KEY=your_secret_key_min_32_chars_long
+
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Token Expiry
+REFRESH_TOKEN_EXPIRES_DAYS=30
+REFRESH_ROTATE_THRESHOLD_DAYS=7
+
+# Client
 CLIENT_URL=http://localhost:3000
 ```
 
-## 🗃️ Database Setup
+### Database Setup
 
 ```bash
-# Check PostgreSQL connection
-npm run db:check
-
-# Run migrations
+# Jalankan migrations
 npm run migrate:up
 
-# Rollback migration
-npm run migrate:down
-
-# Create new migration
-npm run migrate:create <migration-name>
+# Check PostgreSQL connection
+npm run db:check
 ```
 
-## 🏃 Running the App
+### Running the Server
+
+**Development Mode:**
 
 ```bash
-# Development mode with hot reload
 npm run dev
+```
 
-# Build
+**Production Mode:**
+
+```bash
 npm run build
-
-# Production mode
 npm start
 ```
 
-## 📚 API Documentation
-
-### Authentication
-
-- `POST /api/auth/register` - Register user
-- `POST /api/auth/login` - Login user
-- `POST /api/auth/refresh` - Refresh access token
-- `POST /api/auth/logout` - Logout user
-
-### Users
-
-- `GET /api/users/:id` - Get user by ID
-- `GET /api/users/email/:email` - Get user by email
-- `PUT /api/users/:id` - Update user
-
-### Chat Requests
-
-- `POST /api/chat-requests` - Send chat request (by email)
-- `GET /api/chat-requests/incoming` - List incoming requests
-- `GET /api/chat-requests/outgoing` - List outgoing requests
-- `POST /api/chat-requests/:id/respond` - Accept/Reject/Block request
-- `DELETE /api/chat-requests/:id` - Cancel request (sender only)
-
-**Request Flow:**
-
-1. User A sends request to User B (by email)
-2. System checks:
-    - ✅ No existing chat between them
-    - ✅ No pending request
-    - ✅ No active cooldown (from previous rejection)
-3. User B can:
-    - **Accept** → Creates private chat automatically
-    - **Reject** → Sets 7-day cooldown (User A can't send new request for 7 days)
-    - **Block** → Permanent block
-4. User A can cancel pending request anytime
-
-### Chats
-
-- `POST /api/chats` - Create chat
-- `GET /api/chats/:id` - Get chat by ID
-- `GET /api/chats/user/:userId` - List user's chats
-
-## 🔌 WebSocket Events
-
-Full documentation: [WEBSOCKET_USAGE.md](./docs/WEBSOCKET_USAGE.md)
-
-### Client → Server
-
-- `chat:join` - Join chat room
-- `chat:leave` - Leave chat room
-- `chat:send_message` - Send message
-- `chat:typing` - Typing indicator
-- `chat:mark_read` - Mark message as read
-- `chat:get_online_users` - Get online users count
-
-### Server → Client
-
-- `chat:joined` - Join confirmed
-- `chat:new_message` - New message
-- `chat:user_typing` - User typing
-- `chat:user_joined` - User joined
-- `chat:user_left` - User left
-- `chat:online_users` - Online users count
-- `error` - Error occurred
-
-### Authentication
-
-WebSocket requires JWT token:
-
-```javascript
-const socket = io('http://localhost:3003', {
-    auth: {
-        token: 'your-jwt-token'
-    }
-});
-```
-
-## 📁 Project Structure
+## 📁 Struktur Project
 
 ```
 src/
-├── config/           # Configuration
-├── databases/        # Database connection & transaction wrapper
-├── errors/           # Custom error classes
-├── lib/              # Reusable libraries
-│   ├── password.ts   # SHA256 + bcrypt password hashing
-│   ├── rabbitmq.ts   # RabbitMQ wrapper
-│   └── websocket.ts  # Socket.IO wrapper
-├── middleware/       # Express middlewares
-│   ├── asyncHandler.ts
-│   ├── auth.ts       # JWT authentication
-│   ├── errorHandler.ts
-│   └── logrequest.ts # Colored request logger
-├── modules/          # Feature modules
-│   ├── auth/
+├── config/                 # Configuration files
+│   └── index.ts           # Config loader dari environment variables
+├── databases/             # Database connections
+│   ├── postgres.ts        # PostgreSQL pool setup & helpers
+│   └── redis.ts           # Redis client setup & helpers
+├── errors/                # Custom error classes
+│   └── HttpError.ts       # Standard HTTP error
+├── lib/                   # Libraries & utilities
+│   ├── rabbitmq.ts        # RabbitMQ connection & helpers
+│   └── websocket.ts       # WebSocket (Socket.IO) setup
+├── middleware/            # Express middlewares
+│   ├── auth.ts            # JWT authentication middleware
+│   ├── asyncHandler.ts    # Async error handling wrapper
+│   ├── errorHandler.ts    # Global error handler
+│   └── logrequest.ts      # Request logging
+├── modules/               # Feature modules
+│   ├── auth/              # Authentication
 │   │   └── tokenService.ts
-│   ├── chat/
+│   ├── user/              # User management
+│   │   ├── userModel.ts
+│   │   ├── userRepository.ts
+│   │   ├── userService.ts
+│   │   └── userRoute.ts
+│   ├── chat/              # Chat management
 │   │   ├── chatModel.ts
 │   │   ├── chatRepository.ts
-│   │   ├── chatRoute.ts
 │   │   ├── chatService.ts
-│   │   └── chatWebSocket.ts  # WebSocket handlers
-│   ├── chatRequest/
+│   │   ├── chatRoute.ts
+│   │   └── chatWebSocket.ts
+│   ├── chatRequest/       # Chat request management
 │   │   ├── chatRequestModel.ts
 │   │   ├── chatRequestRepository.ts
-│   │   ├── chatRequestRoute.ts
-│   │   └── chatRequestService.ts
-│   ├── token/
-│   │   └── refreshTokenRepository.ts
-│   └── user/
-│       ├── userModel.ts
-│       ├── userRepository.ts
-│       ├── userRoute.ts
-│       └── userService.ts
-├── scripts/          # Utility scripts
-├── utils/            # Utility functions
-│   └── response.ts   # Standardized API responses
-└── index.ts          # App entry point
+│   │   ├── chatRequestService.ts
+│   │   └── chatRequestRoute.ts
+│   └── token/             # Refresh token management
+│       └── refreshTokenRepository.ts
+├── scripts/               # Utility scripts
+│   └── check-postgres.ts
+├── utils/                 # Utility functions
+│   └── response.ts
+└── index.ts              # Application entry point
+
+migrations/               # Database migrations
+docs/                    # Documentation
 ```
 
-## 🔐 Security Features
+## 🔧 Konfigurasi Environment
 
-- **Password Hashing**: SHA256 → bcrypt (double hashing)
-- **JWT Authentication**: Access token (15m) + Refresh token (7d)
-- **HTTP-only Cookies**: Refresh token stored securely
-- **Request Validation**: Zod schema validation
-- **Rate Limiting**: Cooldown on rejected chat requests
-- **WebSocket Auth**: JWT token required for WS connection
+Semua konfigurasi dimuat dari environment variables di `src/config/index.ts`.
 
-## 🛠️ Libraries
+| Variable       | Default                | Description                |
+|----------------|------------------------|----------------------------|
+| `PORT`         | 3003                   | Server port                |
+| `NODE_ENV`     | development            | Environment mode           |
+| `PG_*`         | localhost:5432         | PostgreSQL connection      |
+| `REDIS_URL`    | redis://localhost:6379 | Redis URL                  |
+| `RABBITMQ_URL` | amqp://localhost       | RabbitMQ URL               |
+| `SECRET_KEY`   | -                      | JWT secret (required)      |
+| `CLIENT_URL`   | *                      | Frontend origin untuk CORS |
 
-### Core Libraries
+## 🗄️ Database & Migrations
+
+### Schema Overview
+
+**users**
+
+- id (UUID, PK)
+- name (VARCHAR)
+- email (VARCHAR, UNIQUE)
+- password (VARCHAR, hashed)
+- avatar (VARCHAR)
+- status (ENUM: online, offline, away)
+- last_seen (TIMESTAMP)
+- created_at (TIMESTAMP)
+
+**chats**
+
+- id (UUID, PK)
+- type (ENUM: private, group)
+- title (VARCHAR, optional)
+- created_by (UUID, FK)
+- created_at (TIMESTAMP)
+
+**chat_members**
+
+- id (UUID, PK)
+- chat_id (UUID, FK)
+- user_id (UUID, FK)
+- role (ENUM: admin, member)
+- joined_at (TIMESTAMP)
+- last_read_message_id (UUID, FK, nullable)
+
+**chat_requests**
+
+- id (UUID, PK)
+- sender_id (UUID, FK)
+- receiver_id (UUID, FK)
+- status (ENUM: pending, accepted, rejected, blocked)
+- created_at (TIMESTAMP)
+- responded_at (TIMESTAMP, nullable)
+
+**refresh_tokens**
+
+- id (UUID, PK)
+- user_id (UUID, FK)
+- token_hash (VARCHAR)
+- expires_at (TIMESTAMP)
+- created_at (TIMESTAMP)
+
+### Menjalankan Migrations
+
+```bash
+# Up (forward)
+npm run migrate:up
+
+# Down (rollback)
+npm run migrate:down
+
+# Create migration baru
+npm run migrate:create --name <name>
+```
+
+## 🔐 Authentication
+
+### JWT Token
+
+Project menggunakan JWT untuk authentication. Ada 2 tipe token:
+
+**Access Token**
+
+- Expires: 15 menit
+- Gunakan untuk API requests
+- Header: `Authorization: Bearer <access_token>`
+
+**Refresh Token**
+
+- Expires: 30 hari (configurable)
+- Disimpan di HTTP-only cookie: `refreshToken`
+- Gunakan untuk mendapatkan access token baru
+
+### Login & Registration
+
+```bash
+POST /api/users/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepass123",
+  "avatar": "https://example.com/avatar.jpg" (optional)
+}
+
+Response:
+{
+  "success": true,
+  "message": "User registered successfully",
+  "data": {
+    "id": "uuid",
+    "email": "john@example.com",
+    "name": "John Doe",
+    "access_token": "eyJ...",
+    "refresh_token": "eyJ..."
+  },
+  "timestamp": "2026-01-12T10:00:00Z"
+}
+```
+
+```bash
+POST /api/users/login
+Content-Type: application/json
+
+{
+  "email": "john@example.com",
+  "password": "securepass123"
+}
+
+Response: (sama seperti register)
+```
+
+### Token Refresh
+
+```bash
+POST /api/users/refresh-token
+
+Response:
+{
+  "success": true,
+  "data": {
+    "access_token": "eyJ...",
+    "refresh_token": "eyJ..." (di-rotate jika mendekati expiry)
+  }
+}
+```
+
+### Password Security
+
+- Password di-hash menggunakan bcrypt (10 rounds)
+- Sebelum di-hash, password di-hash dengan SHA256
+- Flow: Raw Password → SHA256 → Bcrypt
+
+Lihat: `src/modules/auth/tokenService.ts`
+
+## 📡 WebSocket
+
+Project menggunakan Socket.IO untuk real-time communication.
+
+### Setup
+
+WebSocket sudah terintegrasi dan ter-initialize di `src/index.ts`.
 
 ```typescript
-// PostgreSQL with transaction support
-import {executeInTransaction, query} from './databases/postgres';
+ws.useAuth((socket, next) => {
+    // Validate JWT token
+});
 
-// RabbitMQ
+ws.initialize(httpServer, {
+    cors: { origin: Config.CLIENT_URL },
+    pingTimeout: 60000,
+    pingInterval: 25000,
+});
+```
+
+### Events
+
+#### Chat Events
+
+**send_message**
+
+```typescript
+socket.emit('chat:send_message', {
+  chatId: 'uuid',
+  content: 'Hello!',
+  type: 'text' // 'text' | 'image' | 'file'
+});
+```
+
+**user_typing**
+
+```typescript
+socket.emit('chat:typing', {
+  chatId: 'uuid',
+  isTyping: true
+});
+
+// Receive
+socket.on('chat:user_typing', (data) => {
+  // { userId, chatId, isTyping }
+});
+```
+
+**user_online/offline**
+
+```typescript
+socket.on('chat:user_online', (data) => {
+  // { userId, status }
+});
+```
+
+Lihat: `docs/WEBSOCKET_USAGE.md` untuk dokumentasi lengkap.
+
+## 🔴 Redis
+
+Redis digunakan untuk:
+
+- Session caching
+- Real-time presence
+- Rate limiting
+- Message queue
+
+### Inisialisasi
+
+```typescript
+import { initRedis } from './databases/redis';
+
+await initRedis();
+```
+
+### Usage
+
+```typescript
+import { set, get, del, setJson, getJson } from './databases/redis';
+
+// Basic operations
+await set('key', 'value', 3600); // dengan expiry
+await get('key');
+await del('key');
+
+// JSON operations
+await setJson('user:123', { name: 'John', age: 30 });
+const user = await getJson('user:123');
+
+// Direct client access
+import { getRedisClient } from './databases/redis';
+const client = getRedisClient();
+await client.hSet('hash:key', { field1: 'value1' });
+```
+
+Lihat: `docs/REDIS_USAGE.md` untuk dokumentasi lengkap.
+
+## 🐰 RabbitMQ
+
+RabbitMQ digunakan untuk async messaging dan background jobs.
+
+### Setup
+
+```typescript
 import * as rabbit from './lib/rabbitmq';
 
-await rabbit.connect(url);
-await rabbit.publish('exchange', 'routing.key', payload);
-await rabbit.consume('queue', handler);
-
-// WebSocket
-import * as ws from './lib/websocket';
-
-ws.initialize(httpServer, config);
-ws.on('event', handler);
-ws.emitToRoom(room, event, data);
-
-// Password
-import * as password from './lib/password';
-
-const hashed = await password.hash('password');
-const valid = await password.compare('password', hashed);
+await rabbit.connect(Config.RABBITMQ_URL, {
+    retries: 5,
+    useConfirmChannel: true,
+});
 ```
 
-Full documentation:
+### Usage
 
-- [RabbitMQ Usage](./docs/RABBITMQ_USAGE.md)
-- [WebSocket Usage](./docs/WEBSOCKET_USAGE.md)
-- [WebSocket Client Examples](./docs/WEBSOCKET_CLIENT.md)
+```typescript
+// Publish message
+await rabbit.publish('queue_name', {
+    action: 'send_email',
+    email: 'user@example.com'
+});
 
-## 🧪 Testing
-
-```bash
-# Run tests (when implemented)
-npm test
+// Subscribe to queue
+await rabbit.subscribe('queue_name', async (msg) => {
+    console.log('Message:', msg);
+});
 ```
 
-## 📊 Monitoring
+Lihat: `docs/RABBITMQ_USAGE.md` untuk dokumentasi lengkap.
+
+## 📌 API Endpoints
+
+### User Endpoints
+
+| Method | Endpoint                    | Auth | Description          |
+|--------|-----------------------------|------|----------------------|
+| POST   | `/api/users/register`       | -    | Register user baru   |
+| POST   | `/api/users/login`          | -    | Login user           |
+| POST   | `/api/users/refresh-token`  | -    | Refresh access token |
+| POST   | `/api/users/logout`         | ✅    | Logout user          |
+| GET    | `/api/users/:id`            | ✅    | Get user profile     |
+| PUT    | `/api/users/:id`            | ✅    | Update user profile  |
+| GET    | `/api/users`                | ✅    | List all users       |
+| GET    | `/api/users/search?q=query` | ✅    | Search users         |
+
+### Chat Endpoints
+
+| Method | Endpoint                         | Auth | Description             |
+|--------|----------------------------------|------|-------------------------|
+| POST   | `/api/chats`                     | ✅    | Create chat             |
+| GET    | `/api/chats`                     | ✅    | List user's chats       |
+| GET    | `/api/chats/:id`                 | ✅    | Get chat details        |
+| PUT    | `/api/chats/:id`                 | ✅    | Update chat             |
+| DELETE | `/api/chats/:id`                 | ✅    | Delete chat             |
+| POST   | `/api/chats/:id/members`         | ✅    | Add member ke chat      |
+| DELETE | `/api/chats/:id/members/:userId` | ✅    | Remove member dari chat |
+
+### Chat Request Endpoints
+
+| Method | Endpoint                        | Auth | Description                  |
+|--------|---------------------------------|------|------------------------------|
+| POST   | `/api/chat-requests`            | ✅    | Send chat request            |
+| GET    | `/api/chat-requests`            | ✅    | List chat requests           |
+| PUT    | `/api/chat-requests/:id/accept` | ✅    | Accept request & create chat |
+| PUT    | `/api/chat-requests/:id/reject` | ✅    | Reject request               |
+
+## 🧪 Development
+
+### Scripts
 
 ```bash
-# Check health
-curl http://localhost:3003/api/health
+# Development mode (watch)
+npm run dev
 
-# WebSocket stats (in code)
-import * as ws from './lib/websocket';
-console.log('Connected:', ws.getConnectedCount());
-```
+# Build TypeScript
+npm run build
 
-## 🐛 Troubleshooting
+# Production start
+npm start
 
-### Database Connection Issues
-
-```bash
-# Check PostgreSQL
+# Database check
 npm run db:check
 
-# Verify connection string
-psql -h localhost -U postgres -d chatapp
-```
-
-### RabbitMQ Connection Issues
-
-```bash
-# Check RabbitMQ
-rabbitmq-diagnostics status
-
-# Management UI
-http://localhost:15672
-```
-
-### Migration Issues
-
-```bash
-# Check migration status
+# Migrations
 npm run migrate:up
-
-# Reset database (⚠️ destructive)
 npm run migrate:down
-npm run migrate:up
+npm run migrate:create
 ```
 
-## 🚀 Deployment
+### Logging
 
-1. Build the app:
-   ```bash
-   npm run build
-   ```
+Project menggunakan `winston` untuk logging:
 
-2. Set production environment variables
+- Info: Normal operations
+- Warn: Warnings
+- Error: Errors
+- Debug: Development debugging
 
-3. Run migrations:
-   ```bash
-   npm run migrate:up
-   ```
+Logs ditulis ke console dan file (jika configured).
 
-4. Start the app:
-   ```bash
-   npm start
-   ```
+### Error Handling
+
+Semua route errors ditangani dengan `asyncHandler` middleware dan global error handler:
+
+```typescript
+import { asyncHandler } from '../middleware/asyncHandler';
+
+app.get('/route', asyncHandler(async (req, res) => {
+    // errors akan automatically caught & handled
+    throw new Error('Something went wrong');
+}));
+```
+
+### Response Format
+
+Semua API responses mengikuti format standard:
+
+```json
+{
+  "success": true,
+  "message": "Operation successful",
+  "data": { /* payload */ },
+  "timestamp": "2026-01-12T10:00:00Z"
+}
+```
+
+## 📚 Additional Documentation
+
+- [WebSocket Usage](./docs/WEBSOCKET_USAGE.md)
+- [Redis Setup](./docs/REDIS_USAGE.md)
+- [RabbitMQ Setup](./docs/RABBITMQ_USAGE.md)
+- [WebSocket Client](./docs/WEBSOCKET_CLIENT.md)
+
+## 🤝 Contributing
+
+1. Create feature branch
+2. Make changes
+3. Test thoroughly
+4. Submit PR
 
 ## 📝 License
 
 MIT
-
-## 👥 Contributors
-
-Your team name here
 
